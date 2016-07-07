@@ -58,7 +58,7 @@ class DDEStack(object):
 
     # Set processing parameters as instance variables
     def _set_options(self, filename=None, regionsize=(15, 15),
-                    regionspacing=None, euler=True, LMkwargs=None):
+                    regionspacing=None, euler=True, LMkwargs={}):
 
         # open the tiff stack, ask for a new file if filename is invalid
         self.filename = filename
@@ -71,7 +71,7 @@ class DDEStack(object):
 
         # region size is a 2-element list of odd integers specifing the region
         # extent in pixels using the i,j (not x,y) format
-        if len(regionsize)==1:
+        if isinstance(regionsize, (int, long)):
             regionsize = (regionsize, regionsize)
         else:
             regionsize = (regionsize[0:2])
@@ -84,7 +84,7 @@ class DDEStack(object):
         if regionspacing==None:
             regionspacing = self.regionsize
         else:
-            if len(regionspacing)==1:
+            if isinstance(regionspacing, (int, long)):
                 regionspacing = (regionspacing, regionspacing)
             else:
                 regionspacing = (regionspacing[0:2])
@@ -202,7 +202,7 @@ class DDEStack(object):
         plt.title('warped, frame %d region %d'%(ff+1,rr))
         plt.show()
 
-    def show_displacements(self, basename=None, savekwargs=None):
+    def show_displacements(self, basename=None, savekwargs={}):
         # initialize figure window
         plt.figure()
         if basename is not None:
