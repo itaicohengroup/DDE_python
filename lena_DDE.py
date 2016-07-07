@@ -25,8 +25,7 @@ Direct Deformation Estimation (DDE) analysis of local image deformation
        Framework. International Journal of Computer Vision 56, 221-255.
    [3] **include reference on PERI optimization here**
 
-   Written by Lena R. Bartell
-   June 24, 2016
+   Lena R. Bartell
 """
 
 # Imports
@@ -91,7 +90,7 @@ class DDEStack(object):
                 regionspacing = (regionspacing[0:2])
             regionspacing = [int(x) for x in regionspacing] # list of ints
         self.regionspacing = regionspacing
-        
+
         # compare current image to first image (False, lagrngian) of previous image (True, euler)
         self.euler = euler
 
@@ -149,29 +148,29 @@ class DDEStack(object):
 
         num_frames = self.tiffstack.n_frames
         num_regions = self.regions_X0.size
-        
+
         # default initial guess for warp parameters is all zeros
         p0 = np.array([0., 0., 0., 0., 0., 0.], dtype=float)
-        
+
         # loop over each region in each frame
         for ff in xrange(num_frames-1):
             for rr in xrange(num_regions):
-                
+
                 # setup for optimization
                 # - if comparing to the first image, use the previous time's
                 #   optimized parameters as an initial guess for the warp
                 if (not self.euler) and (ff>0):
                     p0 = self.frame[ff].region[rr].LMoptimization.param_vals
-                
+
                 # - template image data
                 if self.euler:
                     data = self.get_image_data(ff, rr, warped=False)
                 else:
                     data = self.get_image_data(0, rr, warped=False)
-                
+
                 # - function to get warped image data, given warp parameters
                 func = self._get_warped_image_func(ff+1, rr)
-                
+
                 # use Brian's LM optimization procedure
                 LMoptimization = opt.LMFunction(data, func, p0,
                                                 **self.LMkwargs)
@@ -232,7 +231,7 @@ class DDEStack(object):
             plt.title('Frame %d'%ff)
             plt.hold(False)
             plt.show()
-            
+
             # save to tif file
             if basename is not None:
                 filename = ('%s_%0' + str(digits) + 'd.tif')%(basename, ff)
