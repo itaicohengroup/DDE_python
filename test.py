@@ -12,5 +12,5 @@ kwargs = {
 stack = DDEStack(**kwargs)
 
 # Displace grid displacements, saving each frame
-basename = '\test_output\frame'
+basename = 'test_output/frame'
 stack.show_displacements(basename=basename)
