@@ -207,32 +207,47 @@ class DDEStack(object):
         plt.figure()
         if basename is not None:
             digits = len(str(self.num_frames-1))
-
+            
+        # parameters for the loop
+        Yoffset = (self.regionsize[0]-1)/2 * np.array((-1, 1, 1, -1, -1))
+        Xoffset = (self.regionsize[1]-1)/2 * np.array((-1, -1, 1, 1, -1))
+            
         # show each frame one at a time
         for ff in xrange(1, self.num_frames):
 
             # get image data and points in current and next frame
             im = self.frame[ff].data
-            if self.euler:
-                x0 = [a.X0 for a in self.frame[ff-1].region]
-                y0 = [a.Y0 for a in self.frame[ff-1].region]
-            else:
-                x0 = [a.X0 for a in self.frame[0].region]
-                y0 = [a.Y0 for a in self.frame[0].region]
-            x1 = [a.x0 for a in self.frame[ff].region]
-            y1 = [a.y0 for a in self.frame[ff].region]
-            num_points = len(x0)
-
-            # show each image
+            
+            # show image
             plt.imshow(im)
             plt.hold(True)
-            for pp in xrange(num_points):
-                plt.plot((x0[pp], x1[pp]), (y0[pp], y1[pp]), 'k.-')
+            
+            for rr in xrange(self.num_regions):
+                # get undeformed box center
+                if self.euler:
+                    X0 = self.frame[ff-1].region[rr].X0
+                    Y0 = self.frame[ff-1].region[rr].Y0
+                else:
+                    X0 = self.frame[0].region[rr].X0
+                    Y0 = self.frame[0].region[rr].Y0
+                
+                # calculate undeformed box corners
+                X, Y = X0 + Xoffset, Y0 + Yoffset
+                
+                # calculate deformed box corners
+                warp = self.frame[ff].region[rr].warp
+                warped_corners = np.dot(warp, np.array((X, Y, 1)).reshape(3, 1))
+                x, y = warped_corners[0][0], warped_corners[1][0]
+                
+                # plot deforned box corners
+                plt.plot(x, y, 'r.-')
+
+            # finish figure
             plt.title('Frame %d'%ff)
             plt.hold(False)
             plt.show()
 
-            # save to tif file
+            # save figure to tif file
             if basename is not None:
                 filename = ('%s_%0' + str(digits) + 'd.tif')%(basename, ff)
                 plt.savefig(filename, **savekwargs)
