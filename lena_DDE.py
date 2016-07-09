@@ -262,7 +262,7 @@ class DDEImage(object):
     def __init__(self, tiffstack, X0, Y0, regionsize, frameix):
         self.frameix = frameix
         self._get_image_data(tiffstack)
-        self._create_image_interpolants(tiffstack.size)
+        self._create_image_interpolants((tiffstack.height, tiffstack.width))
         self._initialize_regions(X0, Y0, regionsize)
 
     # Get image data and numeric gradients
@@ -273,7 +273,7 @@ class DDEImage(object):
     # Create interpolant for image
     def _create_image_interpolants(self, imsize):
         vert_y, vert_x = (np.arange(limit).astype(float) for limit in imsize)
-        self.interp = interpolate((vert_x, vert_y), self.data,
+        self.interp = interpolate((vert_y, vert_x), self.data,
                                   bounds_error=False, fill_value=0.)
 
     # Initialize each region in the image and store them all in a list
