@@ -100,7 +100,7 @@ class DDEStack(object):
     # Define region centers
     def _set_region_centers(self):
         halfsize = [(x-1)/2 for x in self.regionsize]
-        imsize = self.tiffstack.size
+        imsize = (self.tiffstack.height, self.tiffstack.width)
         regionspacing = self.regionspacing
         Yv, Xv = (np.arange(halfsize[k], imsize[k]-halfsize[k],
                             regionspacing[k]) for k in xrange(2))
@@ -134,7 +134,7 @@ class DDEStack(object):
             X = self.frame[frameix].region[regionix].X
             Y = self.frame[frameix].region[regionix].Y
 
-        pts = np.vstack((X, Y)).T
+        pts = np.vstack((Y, X)).T
         return self.frame[frameix].interp(pts)
 
     def _get_warped_image_func(self, frameix, regionix):
@@ -207,21 +207,21 @@ class DDEStack(object):
         plt.figure()
         if basename is not None:
             digits = len(str(self.num_frames-1))
-            
+
         # parameters for the loop
         Yoffset = (self.regionsize[0]-1)/2 * np.array((-1, 1, 1, -1, -1))
         Xoffset = (self.regionsize[1]-1)/2 * np.array((-1, -1, 1, 1, -1))
-            
+
         # show each frame one at a time
         for ff in xrange(1, self.num_frames):
 
             # get image data and points in current and next frame
             im = self.frame[ff].data
-            
+
             # show image
             plt.imshow(im)
             plt.hold(True)
-            
+
             for rr in xrange(self.num_regions):
                 # get undeformed box center
                 if self.euler:
@@ -230,15 +230,15 @@ class DDEStack(object):
                 else:
                     X0 = self.frame[0].region[rr].X0
                     Y0 = self.frame[0].region[rr].Y0
-                
+
                 # calculate undeformed box corners
                 X, Y = X0 + Xoffset, Y0 + Yoffset
-                
+
                 # calculate deformed box corners
                 warp = self.frame[ff].region[rr].warp
                 warped_corners = np.dot(warp, np.array((X, Y, 1)).reshape(3, 1))
                 x, y = warped_corners[0][0], warped_corners[1][0]
-                
+
                 # plot deforned box corners
                 plt.plot(x, y, 'r.-')
 
