@@ -1,13 +1,13 @@
 # Imports
 from lena_DDE import DDEStack
-import cProfile
-import pstats
+#import cProfile
+#import pstats
 
 # Create test DDE stack
 kwargs = {
-    'filename': 'test_short2_crop.tif',
-    'regionsize': 19,
-    'regionspacing': 50,
+    'filename': 'generated.tif',
+    'regionsize': 35,
+    'regionspacing': 100,
     'euler': False,
     }
 stack = DDEStack(**kwargs)
