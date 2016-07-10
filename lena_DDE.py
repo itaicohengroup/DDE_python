@@ -36,6 +36,9 @@ from PIL import Image
 from scipy.interpolate import RegularGridInterpolator as interpolate
 import peri.opt.optimize as opt
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+import matplotlib.colors as colors
+import matplotlib.cm as cmx
 import os
 
 # globals
@@ -202,7 +205,8 @@ class DDEStack(object):
         plt.title('warped, frame %d region %d'%(ff+1,rr))
         plt.show()
 
-    def show_displacements(self, basename=None, savekwargs={}):
+    def show_deformation(self, basename=None, savekwargs={}, crange=0.01,
+                         strainmapname='coolwarm', alpha=0.9):
         # initialize figure window
         plt.figure()
         if basename is not None:
@@ -211,6 +215,11 @@ class DDEStack(object):
         # parameters for the loop
         Yoffset = (self.regionsize[0]-1)/2 * np.array((-1, 1, 1, -1, -1))
         Xoffset = (self.regionsize[1]-1)/2 * np.array((-1, -1, 1, 1, -1))
+
+        # setup colormap
+        colormap = plt.get_cmap(strainmapname)
+        cNorm  = colors.Normalize(vmin=-crange, vmax=crange)
+        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=colormap)
 
         # show each frame one at a time
         for ff in xrange(1, self.num_frames):
@@ -240,7 +249,16 @@ class DDEStack(object):
                 x, y = warped_corners[0][0], warped_corners[1][0]
 
                 # plot deforned box corners
-                plt.plot(x, y, 'r.-')
+                plt.plot(x, y, 'r.-', lw=.5, ms=3)
+
+                # plot patch with fill color based on strain value
+                F = self.frame[ff].region[rr].F
+                E = (np.dot(F.T, F) - np.eye(2)) / 2
+                strain = E[0,0]
+                color = scalarMap.to_rgba(strain)
+                poly = Polygon(np.vstack((x,y)).T, facecolor=color,
+                               edgecolor='none', alpha=alpha)
+                plt.gca().add_patch(poly)
 
             # finish figure
             plt.title('Frame %d'%ff)
