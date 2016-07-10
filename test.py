@@ -4,11 +4,15 @@ from lena_DDE import DDEStack
 #import pstats
 
 # Create test DDE stack
+LMkwargs = {'damping': 1.,
+            'max_iter': 20,
+            'ptol': 1e-6}
 kwargs = {
-    'filename': 'generated.tif',
+    'filename': 'generated_crop.tif',
     'regionsize': 35,
-    'regionspacing': 100,
+    'regionspacing': 20,
     'euler': False,
+    'LMkwargs': LMkwargs
     }
 stack = DDEStack(**kwargs)
 

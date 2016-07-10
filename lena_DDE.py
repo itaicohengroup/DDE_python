@@ -274,7 +274,7 @@ class DDEImage(object):
     def _create_image_interpolants(self, imsize):
         vert_y, vert_x = (np.arange(limit).astype(float) for limit in imsize)
         self.interp = interpolate((vert_y, vert_x), self.data,
-                                  bounds_error=False, fill_value=0.)
+                                  bounds_error=False, fill_value=None) #(y,x)!
 
     # Initialize each region in the image and store them all in a list
     def _initialize_regions(self, X0, Y0, regionsize):
