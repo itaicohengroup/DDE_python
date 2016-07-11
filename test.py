@@ -9,8 +9,8 @@ LMkwargs = {'damping': 1.,
             'ptol': 1e-7}
 kwargs = {
     'filename': 'test_short2_crop.tif',
-    'regionsize': 35,
-    'regionspacing': 50,
+    'regionsize': 25,
+    'regionspacing': 300,
     'euler': False,
     'LMkwargs': LMkwargs
     }
@@ -19,9 +19,9 @@ stack = DDEStack(**kwargs)
 # Displace grid displacements, saving each frame
 basename = 'test_output/frame'
 savekwargs = {'dpi': 150}
-stack.show_deformation(basename=basename, crange=0.1,
-                       savekwargs=savekwargs, strainmapname='seismic',
-                       alpha=0.5)
+stack.show_deformation(basename=basename, savekwargs=savekwargs, showim=True,
+                       showboxes=True, showstrain=True, straincolormap='bwr',
+                       xlim=(0, 512), ylim=(0, 512))
 
 ## Profile DDEStack creation via cProfile
 #cProfile.run('DDEStack(**DDEparams)', 'runstats', sort='cumulative')

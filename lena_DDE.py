@@ -37,6 +37,7 @@ from scipy.interpolate import RegularGridInterpolator as interpolate
 import peri.opt.optimize as opt
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
 import os
@@ -205,72 +206,109 @@ class DDEStack(object):
         plt.title('warped, frame %d region %d'%(ff+1,rr))
         plt.show()
 
-    def show_deformation(self, basename=None, savekwargs={}, crange=0.01,
-                         strainmapname='coolwarm', alpha=0.9):
+    def show_deformation(self, basename=None, savekwargs={},
+                         showim=True, imcolormap='gray', showboxes=True,
+                         showstrain=True, straincolormap='seismic',
+                         strainlim=0.1, alpha=0.75, xlim=None, ylim=None,
+                         showcolorbar=True):
         # initialize figure window
-        plt.figure()
+        fig = plt.figure()
         if basename is not None:
             digits = len(str(self.num_frames-1))
 
-        # parameters for the loop
-        Yoffset = (self.regionsize[0]-1)/2 * np.array((-1, 1, 1, -1, -1))
-        Xoffset = (self.regionsize[1]-1)/2 * np.array((-1, -1, 1, 1, -1))
+        # setup for plotting box corners
+        if showboxes or showstrain:
+            Yoffset = (self.regionsize[0]-1)/2 * np.array((-1, 1, 1, -1, -1))
+            Xoffset = (self.regionsize[1]-1)/2 * np.array((-1, -1, 1, 1, -1))
 
-        # setup colormap
-        colormap = plt.get_cmap(strainmapname)
-        cNorm  = colors.Normalize(vmin=-crange, vmax=crange)
-        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=colormap)
+            # setup strain colormap
+            if showstrain:
+                colormap = plt.get_cmap(straincolormap)
+                cNorm  = colors.Normalize(vmin=-strainlim, vmax=strainlim)
+                scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=colormap)
 
         # show each frame one at a time
         for ff in xrange(1, self.num_frames):
 
-            # get image data and points in current and next frame
-            im = self.frame[ff].data
-
-            # show image
-            plt.imshow(im)
+            # clear the figure
+            plt.hold(False)
+            plt.clf()
             plt.hold(True)
 
-            for rr in xrange(self.num_regions):
-                # get undeformed box center
-                if self.euler:
-                    X0 = self.frame[ff-1].region[rr].X0
-                    Y0 = self.frame[ff-1].region[rr].Y0
-                else:
-                    X0 = self.frame[0].region[rr].X0
-                    Y0 = self.frame[0].region[rr].Y0
+            # get and show image
+            if showim:
+                im = self.frame[ff].data
+                plt.imshow(im, cmap=imcolormap)
 
-                # calculate undeformed box corners
-                X, Y = X0 + Xoffset, Y0 + Yoffset
+            # get and show grid box deformation & strain for each region
+            if showboxes or showstrain:
 
-                # calculate deformed box corners
-                warp = self.frame[ff].region[rr].warp
-                warped_corners = np.dot(warp, np.array((X, Y, 1)).reshape(3, 1))
-                x, y = warped_corners[0][0], warped_corners[1][0]
+                patches = []
+                strains = []
 
-                # plot deforned box corners
-                plt.plot(x, y, 'r.-', lw=.5, ms=3)
+                # for each region
+                for rr in xrange(self.num_regions):
 
-                # plot patch with fill color based on strain value
-                F = self.frame[ff].region[rr].F
-                E = (np.dot(F.T, F) - np.eye(2)) / 2
-                strain = E[0,0]
-                color = scalarMap.to_rgba(strain)
-                poly = Polygon(np.vstack((x,y)).T, facecolor=color,
-                               edgecolor='none', alpha=alpha)
-                plt.gca().add_patch(poly)
+                    # get undeformed box center
+                    if self.euler:
+                        X0 = self.frame[ff-1].region[rr].X0
+                        Y0 = self.frame[ff-1].region[rr].Y0
+                    else:
+                        X0 = self.frame[0].region[rr].X0
+                        Y0 = self.frame[0].region[rr].Y0
 
-            # finish figure
-            plt.title('Frame %d'%ff)
-            plt.hold(False)
-            plt.show()
+                    # calculate undeformed box corners
+                    X, Y = X0 + Xoffset, Y0 + Yoffset
 
-            # save figure to tif file
+                    # calculate deformed box corners
+                    warp = self.frame[ff].region[rr].warp
+                    warped_corners = np.dot(warp, np.array((X, Y, 1)).reshape(3, 1))
+                    x, y = warped_corners[0][0], warped_corners[1][0]
+
+                    # plot deforned box corners
+                    if showboxes:
+                        plt.plot(x, y, 'r.-', lw=.5, ms=3)
+
+                    # plot patch with fill color based on strain value
+                    if showstrain:
+                        F = self.frame[ff].region[rr].F
+                        E = (np.dot(F.T, F) - np.eye(2)) / 2
+                        strain = E[0,0]
+#                        color = scalarMap.to_rgba(strain)
+#                        poly = Polygon(np.vstack((x,y)).T, facecolor=color,
+#                                       edgecolor='none', alpha=alpha)
+                        poly = Polygon(np.vstack((x,y)).T)
+                        patches.append(poly)
+                        strains.append(strain)
+
+                if showstrain:
+                    p = PatchCollection(patches, cmap=straincolormap, alpha=alpha)
+                    p.set_array(np.array(strains))
+                    p.set_clim([-strainlim, strainlim])
+                    plt.gca().add_collection(p)
+
+                # Add a colorbar
+                if showstrain and showcolorbar:
+                    plt.colorbar(p, label='strain')
+
+            # set axes limits
+            if xlim is not None:
+                plt.gca().set_xlim(xlim)
+            if ylim is not None:
+                plt.gca().set_ylim(xlim)
+
+            # finish figure and, if requested, save to a tif file
             if basename is not None:
+                plt.title('Frame %d'%ff)
+                plt.show()
                 filename = ('%s_%0' + str(digits) + 'd.tif')%(basename, ff)
                 plt.savefig(filename, **savekwargs)
             else:
+                plt.title('Frame %d (click to advance)'%ff)
+                plt.show()
                 plt.waitforbuttonpress()
+
+        # close figure window
         plt.close()
 
 # Define DDEImage class to hold image data and interpolants
