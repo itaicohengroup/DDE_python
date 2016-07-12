@@ -20,6 +20,7 @@ stack = DDEStack(**kwargs)
 basename = 'test_output/frame'
 savekwargs = {'dpi': 150}
 stack.show_deformation(basename=basename, savekwargs=savekwargs, 
+                       straincolormap='bwr', strainlim=0.25, alpha=0.5)
 
 ## Profile DDEStack creation via cProfile
 #cProfile.run('DDEStack(**DDEparams)', 'runstats', sort='cumulative')
