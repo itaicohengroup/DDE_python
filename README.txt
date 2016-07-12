@@ -12,8 +12,8 @@ Direct Deformation Estimation (DDE) analysis of local image deformation
    differentiation of the displacement field.
 
    To optimize the warp parameters, this code implements a variation of the
-   Levenberg-Marquadt algorithm (LMA). This LMA variation was developed by
-   Brian D. Leahy and collaborators [3].
+   Levenberg-Marquadt algorithm (LMA). This LMA variation was implemented in
+   python by Brian D. Leahy and collaborators [3].
 
    References:
    [1] Boyle, J.J., Kume, M., Wyczalkowski, M.A., Taber, L.A., Pless, R.B.,
