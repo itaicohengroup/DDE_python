@@ -190,9 +190,9 @@ class DDEStack(object):
                     self.show_warp(ff, rr)
 
                 # update progress
-                clear()
-                print ' Frame %d of %d, Region %d of %d'%(
-                    ff+1, num_frames-1, rr+1, num_regions)
+                if not rr % 10:
+                    print ' Frame %d of %d, Region %d of %d ...'%(
+                        ff+1, num_frames-1, rr+1, num_regions)
 
     # Traceback deformation gradient tensor components in time and interpolate
     # to get full deformation gradient tensor at each initial region. Only used

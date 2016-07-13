@@ -3,12 +3,12 @@ from lena_DDE import DDEStack
 import dill
 
 # Create test DDE stack
-LMkwargs = {'damping': 100.,
+LMkwargs = {'damping': 1.,
             'max_iter': 20,
-            'ptol': 1e-6}
+            'ptol': 1e-7}
 kwargs = {
-    'filename': 'test_short2_crop.tif',
-    'regionsize': 35,
+    'filename': 'test_fast_crop.tif',
+    'regionsize': 25,
     'euler': True,
     'LMkwargs': LMkwargs
     }
