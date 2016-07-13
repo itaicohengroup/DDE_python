@@ -18,15 +18,10 @@ stack = DDEStack(**kwargs)
 
 
 
-#stack._traceback_F()
-
-
-
-
 # Displace grid displacements, saving each frame
 #basename = 'test_output/frame'
 #savekwargs = {'dpi': 150}
-#stack.show_deformation(basename=basename, savekwargs=savekwargs, 
+#stack.show_deformation(basename=basename, savekwargs=savekwargs,
 #                       straincolormap='bwr', strainlim=0.25, alpha=0.5)
 
 ## Profile DDEStack creation via cProfile
