@@ -58,7 +58,7 @@ class DDEStack(object):
         self._initialize_frames() # list of DDEframes objects
         self._optimize_warp()
         if self.euler:
-            self._traceback_F()
+            self._traceback_warp()
 
     # Set processing parameters as instance variables
     def _set_options(self, filename=None, regionsize=(15, 15),
@@ -131,6 +131,7 @@ class DDEStack(object):
             'euler': self.euler}
         return params
 
+    # Get un/warped image data in a particular region of a particular frame
     def get_image_data(self, frameix, regionix, warped=False):
         if warped==True:
             X = self.frame[frameix].region[regionix].x
@@ -142,6 +143,8 @@ class DDEStack(object):
         pts = np.vstack((Y, X)).T
         return self.frame[frameix].interp(pts)
 
+    # Create a function that, given warp parameters, will return the image 
+    # data, for a particular frame & region
     def _get_warped_image_func(self, frameix, regionix):
         def func(p):
             self.frame[frameix].region[regionix].set_warped_coordinates(p)
@@ -197,14 +200,18 @@ class DDEStack(object):
     # preceeding frame (rather than 1st frame comparison)
     def _traceback_warp(self):
 
-        # setup initial values for each region
+        # setup initial position & warp parameter values for each region
+        X0, Y0 = self.regions_X0, self.regions_Y0
         shape = self.regions_X0.shape
-        p0, p1, p2, p3, p4, p5 = [np.zeros(shape) for _ in xrange(6)]
+        P0, P1, P2, P3, P4, P5 = [
+            np.array([a.p[b] for a in self.frame[0].region]).reshape(shape) 
+            for b in xrange(6)]
 
         # for each time point
         for tt in xrange(1, self.num_frames):
 
             # data for each warp parameter at each region in current frame
+            # warp is from previous to current frame 
             d0, d1, d2, d3, d4, d5 = [
                 np.array([a.p[b] for a in self.frame[tt].region]).reshape(shape)
                 for b in range(6)]
@@ -213,62 +220,42 @@ class DDEStack(object):
             verts = (self.regions_Yv, self.regions_Xv)
             iargs = {'bounds_error':False, 'fill_value':None}
             i0, i1, i2, i3, i4, i5 = \
-                [interpolate(vers, a, **iargs) for a in (d0, d1, d2, d3, d4, d5)]
-
-            # ??????????????????????????????????????????????
-
-
-
-            # for each region
+                [interpolate(verts, a, **iargs) for a in (d0, d1, d2, d3, d4, d5)]
+            
             for rr in xrange(self.num_regions):
-
-                # interpolate to get displacement to next time point
-                x0, y0 = x_prev.flat[rr], y_prev.flat[rr]
-                pts = np.vstack((y0, x0)).T
-                x1 = x0 + dx(pts)
-                y1 = y0 + dy(pts)
-
-                # interpolate to get deformation gradient to next time point
-                F0 = np.array([[f11_prev[rr], f12_prev[rr]], [f21_prev[rr], f22_prev[rr]]])
-                Ftmp = np.array([[f11(pts)[0], f12(pts)[0]], [f21(pts)[0], f22(pts)[0]]])
-                F1 = np.dot(Ftmp, F0)
-
-                # store the results
-                self.frame[tt].region[rr].F_traced = F1
-                self.frame[tt].region[rr].displacement_traced = \
-                    np.array([dx(pts), dy(pts)])
-
-                # set for next iteration
-                x_prev[rr], y_prev[rr] = x1, y1
-                f11_prev[rr], f12_prev[rr], f21_prev[rr], f22_prev[rr] = \
-                    F1.flat[:]
-
-        # replace euler-description data with interpolated lagrangian
-        # descripion
-        for tt in xrange(1, self.num_frames):
-            for rr in xrange(self.num_regions):
-
-                disp = self.frame[tt].region[rr].displacement_euler
-                F = self.frame[tt].region[rr].F_euler
-
-                p = [F[0,0]-1, F[0,1], F[1,0]
-
-                self.frame[tt].region[rr].displacement_euler = \
-                    self.frame[tt].region[rr].displacement
-
-                self.frame[tt].region[rr].displacement = \
-                    self.frame[tt].region[rr].displacement_traced
-
-                del self.frame[tt].region[rr].displacement_traced
-
-                self.frame[tt].region[rr].F_euler = \
-                    self.frame[tt].region[rr].F
-
-                self.frame[tt].region[rr].F = \
-                    self.frame[tt].region[rr].F_traced
-
-                del self.frame[tt].region[rr].F_traced
-
+                
+                # previous region center
+                pt = np.vstack((Y0.flat[rr], X0.flat[rr])).T
+                
+                # previous parameters
+                P = [a.flat[rr] for a in (P0, P1, P2, P3, P4, P5)]
+                
+                # previous F
+                F = getF(P)
+                
+                # in-between parameters
+                ptmp = [a(pt)[0] for a in (i0, i1, i2, i3, i4, i5)]
+                
+                # in-between F
+                ftmp = getF(ptmp)
+                
+                # new F
+                f = np.dot(ftmp, F)
+                
+                # new parameters
+                p = [f[0,0]-1, f[1,0], f[0,1], f[1,1]-1, 
+                     ptmp[4]+P4.flat[rr], ptmp[5]+P5.flat[rr]]
+                
+                # new region center
+                x0, y0 = X0.flat[rr] + p[4], Y0.flat[rr] + p[5]
+                
+                # overwrite current values as initial values for next time pt 
+                X0.flat[rr], Y0.flat[rr] = x0, y0
+                P0.flat[rr], P1.flat[rr], P2.flat[rr], P3.flat[rr], \
+                    P4.flat[rr], P5.flat[rr] = p
+                
+                # store warp parameters for current region in current frame
+                self.frame[tt].region[rr].set_warped_coordinates(p)
 
     # Plot region in template and warped image
     def show_warp(self, ff, rr):
@@ -345,9 +332,6 @@ class DDEStack(object):
                         F = self.frame[ff].region[rr].F
                         E = (np.dot(F.T, F) - np.eye(2)) / 2
                         strain = E[0,0]
-#                        color = scalarMap.to_rgba(strain)
-#                        poly = Polygon(np.vstack((x,y)).T, facecolor=color,
-#                                       edgecolor='none', alpha=alpha)
                         poly = Polygon(np.vstack((x,y)).T)
                         patches.append(poly)
                         strains.append(strain)
@@ -435,7 +419,7 @@ class DDERegion(object):
         self.displacement = displacement(self.p)
 
         # set warped centroid
-        warped_data0 =np.dot(self.warp,
+        warped_data0 = np.dot(self.warp,
                              np.array((self.X0, self.Y0, 1)).reshape(3, 1))
         self.x0, self.y0 = warped_data0[0][0], warped_data0[1][0]
 
