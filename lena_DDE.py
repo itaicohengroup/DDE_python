@@ -164,6 +164,11 @@ class DDEStack(object):
         for ff in xrange(num_frames-1):
             for rr in xrange(num_regions):
 
+                # update progress
+                if rr % 10 is 0:
+                    print ' Frame %d of %d, Region %d of %d ...'%(
+                        ff+1, num_frames-1, rr+1, num_regions)
+                
                 # setup for optimization
                 # - if comparing to the first image, use the previous time's
                 #   optimized parameters as an initial guess for the warp
@@ -189,11 +194,7 @@ class DDEStack(object):
                         )['model_cosine'] > 0.5):
                     self.show_warp(ff, rr)
 
-                # update progress
-                if not rr % 10:
-                    print ' Frame %d of %d, Region %d of %d ...'%(
-                        ff+1, num_frames-1, rr+1, num_regions)
-
+                
     # Traceback deformation gradient tensor components in time and interpolate
     # to get full deformation gradient tensor at each initial region. Only used
     # for 'euler' analysis where deformation is optimized between current and
@@ -218,7 +219,7 @@ class DDEStack(object):
 
             # scalar field interpolants for each parameter
             verts = (self.regions_Yv, self.regions_Xv)
-            iargs = {'bounds_error':False, 'fill_value':None}
+            iargs = {'bounds_error':False, 'fill_value':0}
             i0, i1, i2, i3, i4, i5 = \
                 [interpolate(verts, a, **iargs) for a in (d0, d1, d2, d3, d4, d5)]
             
@@ -337,7 +338,8 @@ class DDEStack(object):
                         strains.append(strain)
 
                 if showstrain:
-                    p = PatchCollection(patches, cmap=straincolormap, alpha=alpha)
+                    p = PatchCollection(patches, cmap=straincolormap, 
+                                        alpha=alpha, edgecolors='none')
                     p.set_array(np.array(strains))
                     p.set_clim([-strainlim, strainlim])
                     plt.gca().add_collection(p)
