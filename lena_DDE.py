@@ -424,19 +424,17 @@ class DDERegion(object):
         self.displacement = displacement(self.p)
 
         # set warped centroid
-        warped_data0 = np.dot(self.warp,
-                             np.array((self.X0, self.Y0, 1)).reshape(3, 1))
-        self.x0, self.y0 = warped_data0[0][0], warped_data0[1][0]
-
+        self.x0, self.y0, _ = np.dot(self.warp,
+                                     np.array((self.X0, self.Y0, 1)))
+        # un-warped coordinates
+        PTS = np.vstack((self.X.flat[:], self.Y.flat[:],
+                         np.ones_like(self.X.flat[:]))).T
+        
         # set warped coordinates
-        self.x, self.y = (np.empty_like(a) for a in (self.X, self.Y))
+        if not hasattr(self, 'x'):
+            self.x, self.y = [np.empty_like(self.X) for _ in xrange(2)]        
         for ii in xrange(self.X.size):
-            X = self.X[ii]
-            Y = self.Y[ii]
-            data = np.array((X, Y, 1.)).reshape((3, 1))
-            warped_data = np.dot(self.warp, data)
-            self.x.flat[ii] = warped_data[0][0]
-            self.y.flat[ii] = warped_data[1][0]
+            self.x.flat[ii], self.y.flat[ii], _ = np.dot(self.warp, PTS[ii])
 
 # Function to creat 2d affine transformation matrix given parameters p
 def getaffine2d(p):
