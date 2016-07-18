@@ -5,6 +5,7 @@
 runstats*
 test*.tif
 __init__.py
+pprofile*
 
 
 #################

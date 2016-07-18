@@ -27,6 +27,9 @@ Direct Deformation Estimation (DDE) analysis of local image deformation
 
    Lena R. Bartell
 """
+# --------------------------------------------------------------------------- #
+# Define classes
+# --------------------------------------------------------------------------- #
 
 # Imports
 from Tkinter import Tk
@@ -279,7 +282,7 @@ class DDEStack(object):
                          showim=True, imcolormap='gray', showboxes=True,
                          showstrain=True, straincolormap='seismic',
                          strainlim=0.1, alpha=0.75, xlim=None, ylim=None,
-                         showcolorbar=True):
+                         showcolorbar=True, strainfn=lambda E: E[0,0]):
         # initialize figure window
         plt.figure()
         if basename is not None:
@@ -332,7 +335,7 @@ class DDEStack(object):
                     if showstrain:
                         F = self.frame[ff].region[rr].F
                         E = (np.dot(F.T, F) - np.eye(2)) / 2
-                        strain = E[0,0]
+                        strain = strainfn(E)
                         poly = Polygon(np.vstack((x,y)).T)
                         patches.append(poly)
                         strains.append(strain)
@@ -454,8 +457,20 @@ def displacement(p):
 
 
 
-
-
+# --------------------------------------------------------------------------- #
+# Example instance of DDE Stack
+# --------------------------------------------------------------------------- #
+LMkwargs = {'damping': 1.,
+            'max_iter': 5,
+            'ptol': 1e-6}
+kwargs = {
+    'filename': 'test_short_crop.tif',
+    'regionsize': 25,
+    'regionspacing': 100,
+    'euler': False,
+    'LMkwargs': LMkwargs
+    }
+stack = DDEStack(**kwargs)
 
 
 
