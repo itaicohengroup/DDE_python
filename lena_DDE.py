@@ -60,8 +60,11 @@ class DDEStack(object):
         self._set_region_centers()
         self._initialize_frames() # list of DDEframes objects
         self._optimize_warp()
+        self.warp_tracedback = False
         if self.euler:
             self._traceback_warp()
+            self.warp_tracedback = True
+        
 
     # Set processing parameters as instance variables
     def _set_options(self, filename=None, regionsize=(15, 15),
@@ -110,7 +113,7 @@ class DDEStack(object):
         imsize = (self.tiffstack.height, self.tiffstack.width)
         regionspacing = self.regionspacing
         Yv, Xv = (np.arange(halfsize[k], imsize[k]-halfsize[k],
-                            regionspacing[k]) for k in xrange(2))
+                            regionspacing[k], dtype=float) for k in xrange(2))
         self.regions_Y0, self.regions_X0 = np.meshgrid(Yv, Xv, indexing='ij')
         self.regions_Yv, self.regions_Xv = Yv, Xv
         self.num_regions = self.regions_X0.size
@@ -147,11 +150,14 @@ class DDEStack(object):
         return self.frame[frameix].interp(pts)
 
     # Create a function that, given warp parameters, will return the image 
-    # data, for a particular frame & region
+    # data with the mean subtracted off, for a particular frame & region
+    # * note: p should be a numpy array of floats
     def _get_warped_image_func(self, frameix, regionix):
         def func(p):
             self.frame[frameix].region[regionix].set_warped_coordinates(p)
-            return self.get_image_data(frameix, regionix, warped=True)
+            data = self.get_image_data(frameix, regionix, warped=True)
+            data = data - np.mean(data)
+            return data
         return func
 
     # Optimize warp for all regions in all images
@@ -222,7 +228,7 @@ class DDEStack(object):
 
             # scalar field interpolants for each parameter
             verts = (self.regions_Yv, self.regions_Xv)
-            iargs = {'bounds_error':False, 'fill_value':0}
+            iargs = {'bounds_error':False, 'fill_value':None}
             i0, i1, i2, i3, i4, i5 = \
                 [interpolate(verts, a, **iargs) for a in (d0, d1, d2, d3, d4, d5)]
             
@@ -247,14 +253,18 @@ class DDEStack(object):
                 f = np.dot(ftmp, F)
                 
                 # new parameters
-                p = [f[0,0]-1, f[1,0], f[0,1], f[1,1]-1, 
-                     ptmp[4]+P4.flat[rr], ptmp[5]+P5.flat[rr]]
+                p = np.array((f[0,0]-1, f[1,0], f[0,1], 
+                              f[1,1]-1, ptmp[4]+P4.flat[rr], 
+                              ptmp[5]+P5.flat[rr]), dtype=float)
                 
                 # new region center
                 x0, y0 = X0.flat[rr] + p[4], Y0.flat[rr] + p[5]
                 
                 # overwrite current values as initial values for next time pt 
-                X0.flat[rr], Y0.flat[rr] = x0, y0
+                try:
+                    X0.flat[rr], Y0.flat[rr] = x0, y0
+                except ValueError:
+                    print 'found an error :('
                 P0.flat[rr], P1.flat[rr], P2.flat[rr], P3.flat[rr], \
                     P4.flat[rr], P5.flat[rr] = p
                 
@@ -323,9 +333,8 @@ class DDEStack(object):
                     X, Y = X0 + Xoffset, Y0 + Yoffset
 
                     # calculate deformed box corners
-                    warp = self.frame[ff].region[rr].warp
-                    warped_corners = np.dot(warp, np.array((X, Y, 1)).reshape(3, 1))
-                    x, y = warped_corners[0][0], warped_corners[1][0]
+                    x, y,_ = np.dot(self.frame[ff].region[rr].warp,
+                                    np.vstack((X, Y, np.ones_like(X))))
 
                     # plot deforned box corners
                     if showboxes:
@@ -341,15 +350,15 @@ class DDEStack(object):
                         strains.append(strain)
 
                 if showstrain:
-                    p = PatchCollection(patches, cmap=straincolormap, 
+                    allpatches = PatchCollection(patches, cmap=straincolormap, 
                                         alpha=alpha, edgecolors='none')
-                    p.set_array(np.array(strains))
-                    p.set_clim([-strainlim, strainlim])
-                    plt.gca().add_collection(p)
+                    allpatches.set_array(np.array(strains))
+                    allpatches.set_clim([-strainlim, strainlim])
+                    plt.gca().add_collection(allpatches)
 
                 # Add a colorbar
                 if showstrain and showcolorbar:
-                    plt.colorbar(p, label='strain')
+                    plt.colorbar(allpatches, label='strain')
 
             # set axes limits
             if xlim is not None:
@@ -394,7 +403,7 @@ class DDEImage(object):
 
     # Initialize each region in the image and store them all in a list
     def _initialize_regions(self, X0, Y0, regionsize):
-        p0 = np.zeros((6,), dtype='float')
+        p0 = np.array((0., 0., 0., 0., 0., 0.), dtype=float)
         self.region = list()
         for rr in xrange(X0.flat[:].size):
             self.region.append(DDERegion(X0.flat[rr], Y0.flat[rr],
@@ -418,6 +427,7 @@ class DDERegion(object):
 
     def set_warped_coordinates(self, p):
         # set warp paremeters and update the related quantities
+        # ** p should be a numpy array of floats!
         self.p = p
         self.warp = getaffine2d(self.p)
         self.F = getF(self.p)
@@ -426,15 +436,10 @@ class DDERegion(object):
         # set warped centroid
         self.x0, self.y0, _ = np.dot(self.warp,
                                      np.array((self.X0, self.Y0, 1)))
-        # un-warped coordinates
-        PTS = np.vstack((self.X.flat[:], self.Y.flat[:],
-                         np.ones_like(self.X.flat[:]))).T
-        
         # set warped coordinates
-        if not hasattr(self, 'x'):
-            self.x, self.y = [np.empty_like(self.X) for _ in xrange(2)]        
-        for ii in xrange(self.X.size):
-            self.x.flat[ii], self.y.flat[ii], _ = np.dot(self.warp, PTS[ii])
+        self.x, self.y, _ = np.dot(self.warp, 
+                                    np.vstack((self.X, self.Y, 
+                                               np.ones_like(self.X))))
 
 # Function to creat 2d affine transformation matrix given parameters p
 def getaffine2d(p):
@@ -458,17 +463,20 @@ def displacement(p):
 # --------------------------------------------------------------------------- #
 # Example instance of DDE Stack
 # --------------------------------------------------------------------------- #
-LMkwargs = {'damping': 1.,
-            'max_iter': 5,
+LMkwargs = {'damping': 100.,
+            'max_iter': 20,
             'ptol': 1e-6}
 kwargs = {
-    'filename': 'test_short_crop.tif',
-    'regionsize': 25,
-    'regionspacing': 100,
+    'filename': 'test_crop.tif',
+    'regionsize': 45,
     'euler': False,
     'LMkwargs': LMkwargs
     }
 stack = DDEStack(**kwargs)
+stack.show_deformation(basename='test_output2/frame', 
+                       strainlim=0.25, xlim=(0, 512), ylim=(0, 512),
+                       strainfn=lambda E: np.linalg.norm(E, ord=2))
+
 
 
 
