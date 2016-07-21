@@ -35,6 +35,7 @@ Direct Deformation Estimation (DDE) analysis of local image deformation
 from Tkinter import Tk
 from tkFileDialog import askopenfilename
 import numpy as np
+import scipy as sp
 from PIL import Image
 from scipy.interpolate import RegularGridInterpolator as interpolate
 import peri.opt.optimize as opt
@@ -61,14 +62,15 @@ class DDEStack(object):
         self._initialize_frames() # list of DDEframes objects
         self._optimize_warp()
         self.warp_tracedback = False
-        if self.euler:
+        if self.euler and self.traceback:
             self._traceback_warp()
             self.warp_tracedback = True
         
 
     # Set processing parameters as instance variables
     def _set_options(self, filename=None, regionsize=(15, 15),
-                    regionspacing=None, euler=True, LMkwargs={}):
+                    regionspacing=None, euler=True, LMkwargs={},
+                    traceback=True, smoothtraceback=True):
 
         # open the tiff stack, ask for a new file if filename is invalid
         self.filename = filename
@@ -103,6 +105,8 @@ class DDEStack(object):
 
         # compare current image to first image (False, lagrngian) of previous image (True, euler)
         self.euler = euler
+        self.traceback = traceback
+        self.smoothtraceback = smoothtraceback
 
         # catch other parameters
         self.LMkwargs = LMkwargs
@@ -221,10 +225,13 @@ class DDEStack(object):
         for tt in xrange(1, self.num_frames):
 
             # data for each warp parameter at each region in current frame
-            # warp is from previous to current frame 
-            d0, d1, d2, d3, d4, d5 = [
-                np.array([a.p[b] for a in self.frame[tt].region]).reshape(shape)
-                for b in range(6)]
+            # warp is from previous to current frame
+            d0, d1, d2, d3, d4, d5 = [np.array([a.p[b] for a in self.frame[tt].region]).reshape(shape) for b in range(6)]
+            
+            # smooth this data before creating interpolant
+            if self.smoothtraceback:
+                gargs = {'sigma': 1, 'mode':'reflect'}
+                d0, d1, d2, d3, d4, d5 = [ sp.ndimage.filters.gaussian_filter(a, **gargs) for a in (d0, d1, d2, d3, d4, d5)]
 
             # scalar field interpolants for each parameter
             verts = (self.regions_Yv, self.regions_Xv)
@@ -463,19 +470,22 @@ def displacement(p):
 # --------------------------------------------------------------------------- #
 # Example instance of DDE Stack
 # --------------------------------------------------------------------------- #
-LMkwargs = {'damping': 100.,
+LMkwargs = {'damping': 1.,
             'max_iter': 20,
             'ptol': 1e-6}
 kwargs = {
-    'filename': 'test_crop.tif',
-    'regionsize': 45,
-    'euler': False,
+    'filename': 'test_shadow_short_crop.tif',
+    'regionsize': 35,
+    'regionspacing': 15, 
+    'euler': True,
+    'traceback': True,
+    'smoothtraceback': True,
     'LMkwargs': LMkwargs
     }
 stack = DDEStack(**kwargs)
-stack.show_deformation(basename='test_output2/frame', 
+stack.show_deformation(basename='test_output/frame', 
                        strainlim=0.25, xlim=(0, 512), ylim=(0, 512),
-                       strainfn=lambda E: np.linalg.norm(E, ord=2))
+                       strainfn=lambda E: E[0, 1], showboxes=False)
 
 
 
