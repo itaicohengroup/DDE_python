@@ -43,6 +43,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 import os
+import dill
 
 # globals
 DEBUG = False
@@ -62,15 +63,21 @@ class DDEStack(object):
         self._initialize_frames() # list of DDEframes objects
         self._optimize_warp()
         self.warp_tracedback = False
+        
         if self.euler and self.traceback:
             self._traceback_warp()
             self.warp_tracedback = True
+            
+        if self.plotresults:
+            self.show_deformation(**self.DISPkwargs)
         
 
     # Set processing parameters as instance variables
-    def _set_options(self, filename=None, regionsize=(15, 15),
-                    regionspacing=None, euler=True, LMkwargs={},
-                    traceback=True, smoothtraceback=True):
+    def _set_options(self, filename=None, basename=None,
+                     regionsize=(15, 15), regionspacing=None, euler=True, 
+                     traceback=True, smoothtraceback=True,
+                     plotresults=True,
+                     LMkwargs={}, DISPkwargs={}):
 
         # open the tiff stack, ask for a new file if filename is invalid
         self.filename = filename
@@ -110,6 +117,10 @@ class DDEStack(object):
 
         # catch other parameters
         self.LMkwargs = LMkwargs
+        self.plotresults = plotresults
+        self.DISPkwargs = DISPkwargs
+        self.basename = basename
+        
 
     # Define region centers
     def _set_region_centers(self):
@@ -169,6 +180,10 @@ class DDEStack(object):
 
         num_frames = self.tiffstack.n_frames
         num_regions = self.regions_X0.size
+        
+        # file for reporting optimization status
+        if self.basename is not None:
+            fopt = open(self.basename+'opt_output.txt', 'w')
 
         # default initial guess for warp parameters is all zeros
         p0 = np.array([0., 0., 0., 0., 0., 0.], dtype=float)
@@ -178,9 +193,9 @@ class DDEStack(object):
             for rr in xrange(num_regions):
 
                 # update progress
-                if rr % 10 is 0:
+                if rr % 50 is 0:
                     print ' Frame %d of %d, Region %d of %d ...'%(
-                        ff+1, num_frames-1, rr+1, num_regions)
+                        ff+1, num_frames-1, rr, num_regions-1)
                 
                 # setup for optimization
                 # - if comparing to the first image, use the previous time's
@@ -206,6 +221,14 @@ class DDEStack(object):
                 if DEBUG and (LMoptimization.get_termination_stats(
                         )['model_cosine'] > 0.5):
                     self.show_warp(ff, rr)
+                    
+                # Update progress, show model cosine
+                if self.basename is not None:
+                    fopt.write('Frame %d of %d, Region %d of %d, model cosine: %0.4f\n'%(
+                        ff+1, num_frames-1, rr+1, num_regions, 
+                        LMoptimization.calc_model_cosine()))
+        if self.basename is not None:
+            fopt.close()
 
                 
     # Traceback deformation gradient tensor components in time and interpolate
@@ -226,18 +249,22 @@ class DDEStack(object):
 
             # data for each warp parameter at each region in current frame
             # warp is from previous to current frame
-            d0, d1, d2, d3, d4, d5 = [np.array([a.p[b] for a in self.frame[tt].region]).reshape(shape) for b in range(6)]
+            d0, d1, d2, d3, d4, d5 = [
+                np.array([a.p[b] for a in self.frame[tt].region]).reshape(shape)
+                for b in range(6)]
             
             # smooth this data before creating interpolant
             if self.smoothtraceback:
-                gargs = {'sigma': 1, 'mode':'reflect'}
-                d0, d1, d2, d3, d4, d5 = [ sp.ndimage.filters.gaussian_filter(a, **gargs) for a in (d0, d1, d2, d3, d4, d5)]
+                gargs = {'sigma': self.num_regions/400., 'mode':'reflect'}
+                d0, d1, d2, d3, d4, d5 = [
+                    sp.ndimage.filters.gaussian_filter(a, **gargs) 
+                    for a in (d0, d1, d2, d3, d4, d5)]
 
             # scalar field interpolants for each parameter
             verts = (self.regions_Yv, self.regions_Xv)
             iargs = {'bounds_error':False, 'fill_value':None}
-            i0, i1, i2, i3, i4, i5 = \
-                [interpolate(verts, a, **iargs) for a in (d0, d1, d2, d3, d4, d5)]
+            i0, i1, i2, i3, i4, i5 = [interpolate(verts, a, **iargs) 
+                for a in (d0, d1, d2, d3, d4, d5)]
             
             for rr in xrange(self.num_regions):
                 
@@ -268,10 +295,7 @@ class DDEStack(object):
                 x0, y0 = X0.flat[rr] + p[4], Y0.flat[rr] + p[5]
                 
                 # overwrite current values as initial values for next time pt 
-                try:
-                    X0.flat[rr], Y0.flat[rr] = x0, y0
-                except ValueError:
-                    print 'found an error :('
+                X0.flat[rr], Y0.flat[rr] = x0, y0
                 P0.flat[rr], P1.flat[rr], P2.flat[rr], P3.flat[rr], \
                     P4.flat[rr], P5.flat[rr] = p
                 
@@ -298,6 +322,7 @@ class DDEStack(object):
     def show_deformation(self, basename=None, savekwargs={},
                          showim=True, imcolormap='gray', showboxes=True,
                          showstrain=True, straincolormap='seismic',
+                         showcenters=True,
                          strainlim=0.1, alpha=0.75, xlim=None, ylim=None,
                          showcolorbar=True, strainfn=lambda E: E[0,0]):
         # initialize figure window
@@ -324,7 +349,7 @@ class DDEStack(object):
                 plt.imshow(im, cmap=imcolormap)
 
             # get and show grid box deformation & strain for each region
-            if showboxes or showstrain:
+            if showboxes or showstrain or showcenters:
                 # initialize
                 patches = []
                 strains = []
@@ -338,11 +363,17 @@ class DDEStack(object):
 
                     # calculate undeformed box corners
                     X, Y = X0 + Xoffset, Y0 + Yoffset
-
+                    
                     # calculate deformed box corners
+                    x0, y0, _ = np.dot(self.frame[ff].region[rr].warp,
+                                       (X0, Y0, 1.))
                     x, y,_ = np.dot(self.frame[ff].region[rr].warp,
                                     np.vstack((X, Y, np.ones_like(X))))
 
+                    # plot box center
+                    if showcenters:
+                        plt.plot(x0, y0, 'k.', ms=3)
+                    
                     # plot deforned box corners
                     if showboxes:
                         plt.plot(x, y, 'r.-', lw=.5, ms=3)
@@ -377,7 +408,7 @@ class DDEStack(object):
             if basename is not None:
                 plt.title('Frame %d'%ff)
                 plt.show()
-                filename = ('%s_%0' + str(digits) + 'd.tif')%(basename, ff)
+                filename = ('%sframe_%0' + str(digits) + 'd.tif')%(basename, ff)
                 plt.savefig(filename, **savekwargs)
             else:
                 plt.title('Frame %d (click to advance)'%ff)
@@ -470,23 +501,40 @@ def displacement(p):
 # --------------------------------------------------------------------------- #
 # Example instance of DDE Stack
 # --------------------------------------------------------------------------- #
-LMkwargs = {'damping': 1.,
+basename = 'test_output2/'
+
+LMkwargs = {'damping': 100.,
             'max_iter': 20,
-            'ptol': 1e-6}
+            'ptol': 1e-7}
+
+DISPkwargs = {'basename': basename,
+              'strainlim': 0.25,
+              'xlim': (0, 512),
+              'ylim': (0, 512),
+              'strainfn': lambda E: E[0,1], 
+              'showboxes': False, 
+              'alpha': 0.4 
+              }
 kwargs = {
-    'filename': 'test_shadow_short_crop.tif',
-    'regionsize': 35,
-    'regionspacing': 15, 
+    'filename': 'test_shadow_short_crop_blur.tif',
+    'basename': basename,
+    'regionsize': 15,
+    'regionspacing': 15,
     'euler': True,
     'traceback': True,
     'smoothtraceback': True,
-    'LMkwargs': LMkwargs
+    'plotresults': True,
+    'LMkwargs': LMkwargs,
+    'DISPkwargs': DISPkwargs
     }
-stack = DDEStack(**kwargs)
-stack.show_deformation(basename='test_output/frame', 
-                       strainlim=0.25, xlim=(0, 512), ylim=(0, 512),
-                       strainfn=lambda E: E[0, 1], showboxes=False)
+    
 
+stack = DDEStack(**kwargs)
+
+# Also use dill (pickle) to save the stack instance
+f = open(basename+'stack.p', 'wb')
+dill.dump(stack, f)
+f.close()
 
 
 
