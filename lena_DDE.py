@@ -35,15 +35,16 @@ Direct Deformation Estimation (DDE) analysis of local image deformation
 from Tkinter import Tk
 from tkFileDialog import askopenfilename
 import numpy as np
-import scipy as sp
 from PIL import Image
 from scipy.interpolate import RegularGridInterpolator as interpolate
+from scipy.signal import savgol_filter as sgfilt
 import peri.opt.optimize as opt
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 import os
 import dill
+import warnings 
 
 # globals
 DEBUG = False
@@ -54,9 +55,12 @@ class DDEStack(object):
     """
     parameters are specified in i,j (not x,y) format
     """
-
+    
     # Initialize class
     def __init__(self, **kwargs):
+        # customize warnings
+        warnings.formatwarning = warning_on_one_line
+        
         print 'Initializing DDEStack'
         self._set_options(**kwargs)
         self._set_region_centers()
@@ -149,7 +153,10 @@ class DDEStack(object):
             'regionspacing': self.regionspacing,
             'num_frames': self.num_frames,
             'num_regions': self.num_regions,
-            'euler': self.euler}
+            'euler': self.euler,
+            'traceback': self.traceback,
+            'smoothtraceback': self.smoothtraceback,
+            'LMKwargs': self.LMkwargs}
         return params
 
     # Get un/warped image data in a particular region of a particular frame
@@ -224,9 +231,13 @@ class DDEStack(object):
                     
                 # Update progress, show model cosine
                 if self.basename is not None:
-                    fopt.write('Frame %d of %d, Region %d of %d, model cosine: %0.4f\n'%(
-                        ff+1, num_frames-1, rr+1, num_regions, 
-                        LMoptimization.calc_model_cosine()))
+                    modelcosine = LMoptimization.calc_model_cosine()
+                    message = 'Frame %d of %d, Region %d of %d, ' \
+                        'model cosine: %0.4f'%(ff+1, num_frames-1, rr+1, 
+                                               num_regions, modelcosine)
+                    if modelcosine > 0.05:
+                        message = message + ' *** large model cosine'
+                    fopt.write('%s\n'%(message))
         if self.basename is not None:
             fopt.close()
 
@@ -243,6 +254,14 @@ class DDEStack(object):
         P0, P1, P2, P3, P4, P5 = [
             np.array([a.p[b] for a in self.frame[0].region]).reshape(shape) 
             for b in xrange(6)]
+        
+        # setup parameters for smoothing before back-interpolating)
+        if self.smoothtraceback:
+            sgargs = {'window_length':11, 'polyorder': 3, 'mode':'interp'}
+            
+            if sgargs['window_length'] > np.min(X0.shape):
+                warnings.warn('Too few regions to smooth data during traceback. Skipping.')
+                self.smoothtraceback = False
 
         # for each time point
         for tt in xrange(1, self.num_frames):
@@ -255,10 +274,13 @@ class DDEStack(object):
             
             # smooth this data before creating interpolant
             if self.smoothtraceback:
-                gargs = {'sigma': self.num_regions/400., 'mode':'reflect'}
                 d0, d1, d2, d3, d4, d5 = [
-                    sp.ndimage.filters.gaussian_filter(a, **gargs) 
-                    for a in (d0, d1, d2, d3, d4, d5)]
+                    sgfilt(sgfilt(a, axis=0, **sgargs), axis=1, **sgargs)
+                    for a in (d0, d1, d2, d3, d4, d5)] 
+#                gargs = {'sigma': 1., 'mode':'reflect'}
+#                d0, d1, d2, d3, d4, d5 = [
+#                    sp.ndimage.filters.gaussian_filter(a, **gargs) 
+#                    for a in (d0, d1, d2, d3, d4, d5)]
 
             # scalar field interpolants for each parameter
             verts = (self.regions_Yv, self.regions_Xv)
@@ -496,7 +518,10 @@ def getF(p):
 def displacement(p):
     return np.array([p[4], p[5]])
 
-
+# set custom warning format to avoid printing redudant line
+def warning_on_one_line(message, category, filename, lineno, file=None, line=None):
+    return '%s:%s: %s: %s\n' % (os.path.basename(filename),
+                                lineno, category.__name__, message)
 
 # --------------------------------------------------------------------------- #
 # Example instance of DDE Stack
@@ -513,18 +538,18 @@ DISPkwargs = {'basename': basename,
               'ylim': (0, 512),
               'strainfn': lambda E: E[0,1], 
               'showboxes': False, 
-              'alpha': 0.4 
+              'alpha': 0.2 
               }
 kwargs = {
     'filename': 'test_shadow_short_crop_blur.tif',
     'basename': basename,
-    'regionsize': 15,
+    'regionsize': 35,
     'regionspacing': 15,
     'euler': True,
     'traceback': True,
     'smoothtraceback': True,
-    'plotresults': True,
     'LMkwargs': LMkwargs,
+    'plotresults': True,
     'DISPkwargs': DISPkwargs
     }
     
@@ -535,6 +560,7 @@ stack = DDEStack(**kwargs)
 f = open(basename+'stack.p', 'wb')
 dill.dump(stack, f)
 f.close()
+
 
 
 
