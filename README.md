@@ -1,7 +1,7 @@
 # DDE_python
 by [Lena R. Bartell, Itai Cohen Group, Cornell Unviersity](#authors)
 
-Direct Deformation Estimation (DDE) analysis of local image deformation. 
+Python implementation of Direct Deformation Estimation (DDE) to analyze of local image deformation. 
 
 DDE is a variation of the Lucas-Kanade (LK) algorithm for estimating image displacements and deformation gradient tensor fields [1-2]. LK estimates image displacements by optimizing a local warp of the template image; the deformation gradient is then calculated by differentiating the displacement field. DDE limits the LK algorithm to a 2D affine warp, which (after optimization) directly maps to the deformation gradient tensor (F), thus eliminating the noise inherent in numerical differentiation of the displacement field. To optimize the warp parameters, this code implements a variation of the Levenberg-Marquadt algorithm (LMA). This LMA variation was implemented in python by Brian D. Leahy and collaborators [3].
 
