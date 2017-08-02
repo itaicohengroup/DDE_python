@@ -1,5 +1,5 @@
 # Imports
-from lena_DDE import DDEStack
+from DDE import DDEStack
 import dill
 
 # Create test DDE stack

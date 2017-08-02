@@ -23,7 +23,7 @@ Direct Deformation Estimation (DDE) analysis of local image deformation
        tissues. Journal of The Royal Society Interface 11, 20140685.
    [2] Baker, S., Matthews, I., 2004. Lucas-Kanade 20 Years On: A Unifying
        Framework. International Journal of Computer Vision 56, 221-255.
-   [3] **include reference on PERI optimization here**
+   [3] **include reference on PERI optimization here  (currently in preparation)**
 
    Lena R. Bartell
 """
